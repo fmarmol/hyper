@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 )
@@ -42,7 +42,7 @@ func (r *Request) OnResponseCheck(f func(*http.Response) error) *Request {
 
 func (r *Response) Raw() ([]byte, error) {
 	defer r.Body.Close()
-	return ioutil.ReadAll(r.Body)
+	return io.ReadAll(r.Body)
 }
 
 func (r *Response) ParseJson(i any) error {
@@ -112,6 +112,17 @@ func (r *Request) SetHeader(key string, values ...string) *Request {
 	return r
 }
 
+func (r *Request) SetQueryParam(key, value string) *Request {
+	if r.request.URL == nil {
+		r.err = errors.New("cannot add query param to nil url")
+		return r
+	}
+	query := r.request.URL.Query()
+	query.Add(key, value)
+	r.request.URL.RawQuery = query.Encode()
+	return r
+}
+
 func (r *Request) GetHeader() http.Header {
 	return r.request.Header
 }
@@ -140,9 +151,25 @@ func (r *Request) Json(body any) *Request {
 		return r
 	}
 	buf := bytes.NewBuffer(data)
-	bufclose := ioutil.NopCloser(buf)
+	bufclose := io.NopCloser(buf)
 	r.request.Body = bufclose
 	return r
+}
+
+func (r *Request) DoAndParseJson(i any) error {
+	resp, err := r.Do()
+	if err != nil {
+		if resp != nil {
+			raw, err2 := io.ReadAll(resp.Body)
+			if err2 != nil {
+				return fmt.Errorf("error: %v, content=%v", err, err2)
+			} else {
+				return fmt.Errorf("error: %v, content=%v", err, string(raw))
+			}
+		}
+		return fmt.Errorf("error: %v", err)
+	}
+	return resp.ParseJson(i)
 }
 
 func (r *Request) Do() (*Response, error) {
