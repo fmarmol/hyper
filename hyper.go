@@ -137,6 +137,10 @@ func (r *Request) Url(u string) *Request {
 	return r
 }
 
+func (r *Request) GetUrl() string {
+	return r.request.URL.String()
+}
+
 func (r *Request) Body(rc io.ReadCloser) *Request {
 	r.request.Body = rc
 	return r
